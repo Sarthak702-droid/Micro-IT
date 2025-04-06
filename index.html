@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Number Guessing Game</title>
+    <!-- Tailwind CSS via CDN (production) -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,typography,aspect-ratio"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Poppins', 'sans-serif'],
+            },
+          }
+        }
+      }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap');
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-image: url('https://images.pexels.com/photos/3495061/pexels-photo-3495061.jpeg');
+            background-size: cover;
+            background-position: center;
+            min-height: 100vh;
+        }
+        .fade-in {
+            animation: fadeIn 0.3s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center p-4">
+    <div class="w-full max-w-md bg-white/90 backdrop-blur-sm rounded-xl shadow-2xl overflow-hidden">
+        <div class="p-8">
+            <h1 class="text-3xl font-bold text-center text-gray-800 mb-2">Guess the Number</h1>
+            <p class="text-center text-gray-600 mb-6">I'm thinking of a number between 1 and 100</p>
+            
+            <div class="mb-6">
+                <div class="flex items-center border-b-2 border-purple-500 py-2">
+                    <input type="number" id="guessInput" 
+                        class="appearance-none bg-transparent border-none w-full text-gray-700 mr-3 py-1 px-2 leading-tight focus:outline-none" 
+                        placeholder="Enter your guess" min="1" max="100">
+                    <button id="submitBtn" 
+                        class="flex-shrink-0 bg-purple-500 hover:bg-purple-700 border-purple-500 hover:border-purple-700 text-sm border-4 text-white py-1 px-4 rounded transition-all">
+                        Submit
+                    </button>
+                </div>
+                <p id="errorText" class="text-red-500 text-xs italic mt-1 h-4"></p>
+            </div>
+
+            <div id="feedback" class="min-h-12 mb-6">
+                <div id="resultContainer" class="hidden fade-in text-center">
+                    <p id="resultText" class="text-lg font-semibold"></p>
+                    <p id="hintText" class="text-sm mt-1"></p>
+                </div>
+            </div>
+
+            <div class="flex justify-between items-center">
+                <div>
+                    <span class="text-sm font-medium text-gray-500">Attempts: </span>
+                    <span id="attemptCount" class="text-sm font-bold">0/5</span>
+                </div>
+                <button id="resetBtn" 
+                    class="text-sm bg-gray-200 hover:bg-gray-300 text-gray-800 py-1 px-3 rounded transition-all">
+                    <i class="fas fa-redo mr-1"></i> New Game
+                </button>
+            </div>
+        </div>
+
+        <div id="leaderboard" class="bg-gray-50 p-4 border-t border-gray-200 hidden">
+            <h3 class="text-lg font-semibold text-center mb-2">Top Scores</h3>
+            <ul id="scoresList" class="space-y-1">
+                <!-- Scores will be populated here -->
+            </ul>
+        </div>
+    </div>
+
+    <!-- Favicon to prevent 404 error -->
+    <link rel="icon" href="data:,">
+    <!-- Local fallback sounds -->
+    <audio id="winSound">
+      <source src="https://www.soundjay.com/buttons/sounds/button-09.mp3" type="audio/mpeg">
+    </audio>
+    <audio id="loseSound">
+      <source src="https://www.soundjay.com/buttons/sounds/button-10.mp3" type="audio/mpeg">
+    </audio>
+
+    <script>
+        // Game state
+        let targetNumber;
+        let attempts = 0;
+        const maxAttempts = 5;
+        let scores = JSON.parse(localStorage.getItem('guessGameScores')) || [];
+
+        // DOM elements
+        const guessInput = document.getElementById('guessInput');
+        const submitBtn = document.getElementById('submitBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const errorText = document.getElementById('errorText');
+        const resultContainer = document.getElementById('resultContainer');
+        const resultText = document.getElementById('resultText');
+        const hintText = document.getElementById('hintText');
+        const attemptCount = document.getElementById('attemptCount');
+        const leaderboard = document.getElementById('leaderboard');
+        const scoresList = document.getElementById('scoresList');
+        const winSound = document.getElementById('winSound');
+        const loseSound = document.getElementById('loseSound');
+
+        // Initialize game
+        function initGame() {
+            targetNumber = Math.floor(Math.random() * 100) + 1;
+            attempts = 0;
+            updateAttemptDisplay();
+            clearFeedback();
+            guessInput.value = '';
+            guessInput.focus();
+            // Removed debug console log
+        }
+
+        // Update attempt display
+        function updateAttemptDisplay() {
+            attemptCount.textContent = `${attempts}/${maxAttempts}`;
+            if (attempts >= maxAttempts - 1) {
+                attemptCount.classList.add('text-red-500');
+            } else {
+                attemptCount.classList.remove('text-red-500');
+            }
+        }
+
+        // Clear feedback
+        function clearFeedback() {
+            resultContainer.classList.add('hidden');
+            errorText.textContent = '';
+        }
+
+        // Show feedback
+        function showFeedback(message, hint = '', isSuccess = false) {
+            resultText.textContent = message;
+            hintText.textContent = hint;
+            resultText.className = `text-lg font-semibold ${isSuccess ? 'text-green-600' : 'text-red-600'}`;
+            resultContainer.classList.remove('hidden');
+        }
+
+        // Check guess
+        function checkGuess() {
+            const guess = parseInt(guessInput.value);
+            
+            // Validate input
+            if (isNaN(guess) || guess < 1 || guess > 100) {
+                errorText.textContent = 'Please enter a number between 1 and 100';
+                return;
+            }
+
+            attempts++;
+            updateAttemptDisplay();
+            
+            if (guess === targetNumber) {
+                // Correct guess
+                showFeedback('🎉 Correct! You win!', '', true);
+                winSound.play();
+                submitBtn.disabled = true;
+                saveScore(attempts);
+                showLeaderboard();
+                return;
+            }
+
+            if (attempts >= maxAttempts) {
+                // Game over
+                showFeedback('Game Over!', `The number was ${targetNumber}`);
+                loseSound.play();
+                submitBtn.disabled = true;
+                showLeaderboard();
+                return;
+            }
+
+            // Provide hint
+            const hint = guess < targetNumber ? 'Too low!' : 'Too high!';
+            showFeedback('Try again!', hint);
+        }
+
+        // Save score to localStorage
+        function saveScore(score) {
+            scores.push(score);
+            scores.sort((a, b) => a - b); // Sort ascending (lower is better)
+            if (scores.length > 5) {
+                scores = scores.slice(0, 5); // Keep top 5
+            }
+            localStorage.setItem('guessGameScores', JSON.stringify(scores));
+            updateLeaderboard();
+        }
+
+        // Update leaderboard
+        function updateLeaderboard() {
+            scoresList.innerHTML = '';
+            scores.forEach((score, index) => {
+                const li = document.createElement('li');
+                li.className = 'flex justify-between';
+                li.innerHTML = `
+                    <span>${index + 1}. ${score} attempt${score !== 1 ? 's' : ''}</span>
+                    <span class="text-gray-500">${new Date().toLocaleDateString()}</span>
+                `;
+                scoresList.appendChild(li);
+            });
+        }
+
+        // Show leaderboard
+        function showLeaderboard() {
+            updateLeaderboard();
+            leaderboard.classList.remove('hidden');
+        }
+
+        // Event listeners
+        submitBtn.addEventListener('click', checkGuess);
+        resetBtn.addEventListener('click', () => {
+            initGame();
+            submitBtn.disabled = false;
+            resultContainer.classList.add('hidden');
+            leaderboard.classList.add('hidden');
+        });
+
+        guessInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                checkGuess();
+            }
+        });
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', initGame);
+    </script>
+</body>
+</html>
